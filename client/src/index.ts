@@ -92,12 +92,23 @@ async function cmdChat(username: string, contact: string): Promise<void> {
       console.log(`\n[connection: ${state}]`);
       rl.prompt();
     },
+    onSignalingError: (message) => {
+      console.log(`\n[signaling: ${message}]`);
+      rl.prompt();
+    },
   });
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
 
   console.log(`Connecting to ${contact}... (type /quit to exit)`);
-  await manager.connectToPeer(contactPublicKey);
+  try {
+    await manager.connectToPeer(contactPublicKey);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    manager.destroy();
+    rl.close();
+    process.exit(1);
+  }
 
   rl.prompt();
   rl.on("line", (line) => {
