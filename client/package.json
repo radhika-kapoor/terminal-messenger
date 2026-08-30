@@ -1,0 +1,27 @@
+{
+  "name": "terminal-messenger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Terminal P2P chat client. Connects to the terminal-messenger server for account auth and WebRTC signaling only; messages flow directly device-to-device and chat history is stored locally, never on the server.",
+  "type": "module",
+  "bin": {
+    "terminal-messenger": "dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p .",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1",
+    "werift": "^0.23.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}
