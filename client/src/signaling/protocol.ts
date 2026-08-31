@@ -5,12 +5,14 @@
 
 export type ClientToServer =
   | { type: "register"; token: string; publicKey: string }
-  | { type: "signal"; to: string; payload: unknown };
+  | { type: "signal"; to: string; payload: unknown }
+  | { type: "watch"; publicKey: string };
 
 export type ServerToClient =
   | { type: "registered"; publicKey: string }
   | { type: "signal"; from: string; payload: unknown }
   | { type: "peer-offline"; publicKey: string }
+  | { type: "peer-online"; publicKey: string }
   | { type: "error"; message: string };
 
 export function parseServerMessage(raw: string): ServerToClient | null {

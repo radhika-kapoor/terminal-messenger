@@ -3,7 +3,7 @@ import http from "node:http";
 import bcrypt from "bcryptjs";
 import express from "express";
 import { WebSocketServer, type WebSocket } from "ws";
-import { initDb, createUser, findUserByUsername, setUserPublicKey } from "./db.js";
+import { initDb, createUser, findUserByUsername, findUserByPublicKey, setUserPublicKey } from "./db.js";
 import { issueToken, verifyToken } from "./auth.js";
 import { parseClientMessage, isValidPublicKey, type ServerToClient } from "./protocol.js";
 
@@ -84,10 +84,39 @@ app.get("/users/:username", async (req, res) => {
   res.json({ username: user.username, publicKey: user.public_key });
 });
 
+// Reverse lookup: a daemon that receives an inbound connection from a
+// public key it doesn't recognize yet (a contact messaging it for the
+// first time this run) uses this to find out who that is.
+app.get("/users/by-key/:publicKey", async (req, res) => {
+  const auth = req.header("authorization");
+  const token = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
+  if (!token || !verifyToken(token)) {
+    res.status(401).json({ error: "missing or invalid authorization" });
+    return;
+  }
+  if (!isValidPublicKey(req.params.publicKey)) {
+    res.status(400).json({ error: "publicKey is malformed" });
+    return;
+  }
+
+  const user = await findUserByPublicKey(req.params.publicKey);
+  if (!user) {
+    res.status(404).json({ error: "no account with that public key" });
+    return;
+  }
+
+  res.json({ username: user.username, publicKey: user.public_key });
+});
+
 const server = http.createServer(app);
 
 // publicKey -> live socket. In-memory only, nothing ever touches disk.
 const peers = new Map<string, WebSocket>();
+
+// watched publicKey -> sockets that asked to be told when it comes online.
+// Also in-memory only — just lets an offline sender's daemon know when to
+// retry, nothing about the queued message itself is ever visible here.
+const watchers = new Map<string, Set<WebSocket>>();
 
 function send(socket: WebSocket, message: ServerToClient): void {
   if (socket.readyState === socket.OPEN) {
@@ -99,6 +128,7 @@ const wss = new WebSocketServer({ server, path: "/relay" });
 
 wss.on("connection", (socket) => {
   let registeredKey: string | null = null;
+  const watchedKeys = new Set<string>();
 
   socket.on("message", (raw) => {
     const msg = parseClientMessage(raw.toString());
@@ -126,6 +156,11 @@ wss.on("connection", (socket) => {
       );
       send(socket, { type: "registered", publicKey: msg.publicKey });
       console.log(`[signaling] registered ${payload.username} (${msg.publicKey.slice(0, 8)}…)`);
+
+      // Anyone waiting to know this key came online gets told now.
+      for (const watcher of watchers.get(msg.publicKey) ?? []) {
+        send(watcher, { type: "peer-online", publicKey: msg.publicKey });
+      }
       return;
     }
 
@@ -143,12 +178,37 @@ wss.on("connection", (socket) => {
       send(target, { type: "signal", from: registeredKey, payload: msg.payload });
       return;
     }
+
+    if (msg.type === "watch") {
+      if (!registeredKey) {
+        send(socket, { type: "error", message: "register before watching" });
+        return;
+      }
+      let set = watchers.get(msg.publicKey);
+      if (!set) {
+        set = new Set();
+        watchers.set(msg.publicKey, set);
+      }
+      set.add(socket);
+      watchedKeys.add(msg.publicKey);
+
+      // Already online right now — no need to wait for a future register.
+      if (peers.has(msg.publicKey)) {
+        send(socket, { type: "peer-online", publicKey: msg.publicKey });
+      }
+      return;
+    }
   });
 
   socket.on("close", () => {
     if (registeredKey && peers.get(registeredKey) === socket) {
       peers.delete(registeredKey);
       console.log(`[signaling] disconnected ${registeredKey.slice(0, 8)}…`);
+    }
+    for (const key of watchedKeys) {
+      const set = watchers.get(key);
+      set?.delete(socket);
+      if (set && set.size === 0) watchers.delete(key);
     }
   });
 });

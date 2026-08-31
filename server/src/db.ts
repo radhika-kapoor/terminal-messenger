@@ -50,3 +50,11 @@ export async function findUserByUsername(username: string): Promise<UserRow | nu
 export async function setUserPublicKey(username: string, publicKey: string): Promise<void> {
   await pool.query(`UPDATE users SET public_key = $1 WHERE username = $2`, [publicKey, username]);
 }
+
+export async function findUserByPublicKey(publicKey: string): Promise<UserRow | null> {
+  const result = await pool.query<UserRow>(
+    `SELECT id, username, password_hash, public_key FROM users WHERE public_key = $1`,
+    [publicKey],
+  );
+  return result.rows[0] ?? null;
+}

@@ -38,3 +38,17 @@ export async function lookupPublicKey(token: string, username: string): Promise<
   const data = (await res.json()) as { publicKey: string };
   return data.publicKey;
 }
+
+/** Resolves a public key back to a username — used when a contact messages us first. */
+export async function lookupUsername(token: string, publicKey: string): Promise<string | null> {
+  const res = await fetch(`${SERVER_URL}/users/by-key/${encodeURIComponent(publicKey)}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new AuthError(typeof data.error === "string" ? data.error : `request failed (${res.status})`);
+  }
+  const data = (await res.json()) as { username: string };
+  return data.username;
+}

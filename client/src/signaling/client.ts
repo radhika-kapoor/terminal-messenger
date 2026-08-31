@@ -4,6 +4,7 @@ import { parseServerMessage, type ClientToServer } from "./protocol.js";
 export interface SignalingHandlers {
   onSignal: (from: string, payload: unknown) => void;
   onPeerOffline: (publicKey: string) => void;
+  onPeerOnline: (publicKey: string) => void;
   onOpen?: () => void;
   onClose?: () => void;
   onError?: (message: string) => void;
@@ -18,6 +19,7 @@ export interface SignalingHandlers {
  */
 export class SignalingClient {
   private ws: WebSocket | null = null;
+  private readonly watches = new Set<string>();
 
   constructor(
     private readonly relayUrl: string,
@@ -32,6 +34,9 @@ export class SignalingClient {
 
     ws.on("open", () => {
       this.send({ type: "register", token: this.token, publicKey: this.ownPublicKey });
+      // Re-declare any outstanding watches on (re)connect — the relay's
+      // watcher list is in-memory only and doesn't survive our disconnect.
+      for (const publicKey of this.watches) this.send({ type: "watch", publicKey });
       this.handlers.onOpen?.();
     });
 
@@ -40,6 +45,7 @@ export class SignalingClient {
       if (!msg) return;
       if (msg.type === "signal") this.handlers.onSignal(msg.from, msg.payload);
       if (msg.type === "peer-offline") this.handlers.onPeerOffline(msg.publicKey);
+      if (msg.type === "peer-online") this.handlers.onPeerOnline(msg.publicKey);
       if (msg.type === "error") this.handlers.onError?.(msg.message);
     });
 
@@ -48,6 +54,12 @@ export class SignalingClient {
 
   sendSignal(to: string, payload: unknown): void {
     this.send({ type: "signal", to, payload });
+  }
+
+  /** Asks the relay to tell us when `publicKey` next comes online. */
+  watchPeer(publicKey: string): void {
+    this.watches.add(publicKey);
+    this.send({ type: "watch", publicKey });
   }
 
   disconnect(): void {

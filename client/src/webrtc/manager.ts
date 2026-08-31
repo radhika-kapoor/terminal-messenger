@@ -15,6 +15,7 @@ interface PeerEntry {
 export interface WebRTCManagerCallbacks {
   onMessage: (fromPublicKey: string, plaintext: string) => void;
   onStateChange: (peerPublicKey: string, state: ConnectionState) => void;
+  onPeerOnline: (peerPublicKey: string) => void;
 }
 
 /**
@@ -40,12 +41,18 @@ export class WebRTCManager {
         );
       },
       onPeerOffline: (publicKey) => this.setState(publicKey, "peer-offline"),
+      onPeerOnline: (publicKey) => this.callbacks.onPeerOnline(publicKey),
     });
     this.signaling.connect();
   }
 
   getState(remotePublicKey: string): ConnectionState {
     return this.peers.get(remotePublicKey)?.state ?? "idle";
+  }
+
+  /** Asks the relay to tell us when `remotePublicKey` next comes online. */
+  watchPeer(remotePublicKey: string): void {
+    this.signaling.watchPeer(remotePublicKey);
   }
 
   async connectToPeer(remotePublicKey: string): Promise<void> {

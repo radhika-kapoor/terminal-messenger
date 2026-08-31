@@ -7,12 +7,14 @@
 
 export type ClientToServer =
   | { type: "register"; token: string; publicKey: string }
-  | { type: "signal"; to: string; payload: unknown };
+  | { type: "signal"; to: string; payload: unknown }
+  | { type: "watch"; publicKey: string };
 
 export type ServerToClient =
   | { type: "registered"; publicKey: string }
   | { type: "signal"; from: string; payload: unknown }
   | { type: "peer-offline"; publicKey: string }
+  | { type: "peer-online"; publicKey: string }
   | { type: "error"; message: string };
 
 // A NaCl box public key is 32 raw bytes -> 44 base64 chars (with padding).
@@ -37,6 +39,9 @@ export function parseClientMessage(raw: string): ClientToServer | null {
   }
   if (m.type === "signal" && isValidPublicKey(m.to) && "payload" in m) {
     return { type: "signal", to: m.to as string, payload: m.payload };
+  }
+  if (m.type === "watch" && isValidPublicKey(m.publicKey)) {
+    return { type: "watch", publicKey: m.publicKey };
   }
   return null;
 }
