@@ -124,7 +124,11 @@ Commands:
    manual wiring needed.
 5. In your service's Variables, set `JWT_SECRET` to a long random value
    (e.g. `openssl rand -hex 32`). `PORT` is injected by Railway
-   automatically; don't set it yourself.
+   automatically; don't set it yourself. `STUN_PORT` (see "Known
+   limitations" below) doesn't need to be set here either — Railway's
+   networking has no public UDP exposure to use it, so leave it at its
+   default and the client will simply fall back to the external STUN/TURN
+   servers.
 6. Deploy. Under Settings → Networking, generate a public domain — this
    is the `SERVER_URL` your terminal clients will point at (the WebSocket
    relay lives at `wss://<that-domain>/relay`, derived automatically by the
@@ -145,3 +149,12 @@ Commands:
   (GHSA-2p57-rm9w-gvfp, no fix available upstream) — it's a SSRF-related
   issue in IP-range categorization, not exploitable via this client's own
   usage, but worth knowing about if you audit dependencies.
+- **Self-hosted STUN requires an exposed UDP port.** `server/src/stun.ts`
+  runs a real RFC 5389 STUN binding responder on `STUN_PORT` (default
+  3478/UDP) so the terminal-messenger server itself — not just Google or
+  Open Relay — can tell a client its public IP:port. This works for local
+  development and self-hosted/VPS deployments that expose a UDP port, but
+  **not** on Railway's default networking, which only proxies TCP/HTTP
+  through a single injected `PORT` — no public UDP exposure. On Railway,
+  this STUN entry is simply unreachable and ICE falls through to the
+  external STUN/TURN fallbacks in `client/src/config.ts`; nothing breaks.

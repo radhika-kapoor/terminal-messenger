@@ -6,8 +6,10 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { initDb, createUser, findUserByUsername, findUserByPublicKey, setUserPublicKey } from "./db.js";
 import { issueToken, verifyToken } from "./auth.js";
 import { parseClientMessage, isValidPublicKey, type ServerToClient } from "./protocol.js";
+import { startStunServer } from "./stun.js";
 
 const PORT = Number(process.env.PORT ?? 8787);
+const STUN_PORT = Number(process.env.STUN_PORT ?? 3478);
 const USERNAME_RE = /^[a-zA-Z0-9_-]{3,32}$/;
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -218,6 +220,7 @@ initDb()
     server.listen(PORT, () => {
       console.log(`[server] listening on http://0.0.0.0:${PORT} (WS relay at /relay)`);
     });
+    startStunServer(STUN_PORT);
   })
   .catch((err) => {
     console.error("[server] failed to initialize database", err);
